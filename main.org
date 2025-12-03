@@ -1,2 +1,0 @@
-* Welcome!
-Welcome to a discord bot that allows you to message alters not in front (both in and out of system!) using simplyplural.
