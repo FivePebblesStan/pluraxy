@@ -26,14 +26,16 @@ headers = {
 
 response1 = requests.request("GET", url1, headers=headers, data=payload)
 
+frontersNum = len(response1.json())
+
 sysID = response1.json()[0]["content"]["uid"]
-memID1 = response1.json()[0]["content"]["member"]
 
-url2 = "https://api.apparyllis.com/v1/member/" + sysID + "/" + memID1
-
-response2 = requests.request("GET", url2, headers=headers, data=payload)
-
-fronter = response2.json()["content"]["name"]
+fronters = {}
+for i in range(frontersNum):
+    id = response1.json()[i]["content"]["member"]
+    memUrl = "https://api.apparyllis.com/v1/member/" + sysID + "/" + id
+    response2 = requests.request("GET", memUrl, headers=headers, data=payload)
+    fronters["fronter{0}".format(i)] = response2.json()["content"]["name"]
 
 @bot.event
 async def on_ready():
@@ -46,11 +48,14 @@ class testView(View):
 
     @discord.ui.button(label=":3", style=discord.ButtonStyle.green)
     async def wawawa(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message(fronter + "says: wawawawawawawwawawa", ephemeral=True)
+        await interaction.response.send_message(fronters["fronter0"] + " says: wawawawawawawwawawa", ephemeral=True)
 
 @bot.command(name="test")
 async def test(ctx):
     view = testView(ctx)
-    await ctx.send("Current fronter is " + fronter + "!", view=view)
+    message = ""
+    for i in range(frontersNum):
+        message = message + fronters["fronter{0}".format(i)] + " "
+    await ctx.send("Current fronter is " + message + "!", view=view)
 
 bot.run(token)
