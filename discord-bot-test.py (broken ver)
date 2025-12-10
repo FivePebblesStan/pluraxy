@@ -87,7 +87,7 @@ class optionView(View):
         await interaction.response.send_message(f"The fronter sending this message will be {select.values[0]}", ephemeral=True)
 
 #view (dropdown) for step 2 of px.setup DOES NOT WORK LMAO
-class foldersView(View):
+"""class foldersView(View):
     def __init__(self, ctx):
         super().__init__()
         self.ctx = ctx
@@ -104,8 +104,7 @@ class foldersView(View):
 
     @discord.ui.select(min_values=1, max_values=1, options=folderOpt)
     async def folders(self, interaction: discord.Interaction, select):
-        await interaction.response.send_message(f"The selected folder is: {select.values[0]}", ephemeral=True)
-
+        await interaction.response.send_message(f"The selected folder is: {select.values[0]}", ephemeral=True)"""
 
 #modal for px.setup
 class startModal(Modal):
@@ -114,11 +113,10 @@ class startModal(Modal):
         self.ctx = ctx
         self.input = TextInput(label="Your Simplyplural read token")
         self.add_item(self.input)
-        #self.view = foldersView(self.ctx) <- broekebn,...
 
     async def on_submit(self, interaction: discord.Interaction):
         userToken = self.input.value #make this a global variable somehow pls ty
-        await interaction.response.send_message("Next, which folder would you like to use as the folder of system members who are messageable?\nIt's advised to create a new folder ouside of any nesting, called 'pluraxy'", ephemeral=True) #saadasddshjdsokdkljd add view=self.view on end and make it work
+        await interaction.response.send_message("e", ephemeral=True)
 
 #view for px.setup
 class setupView(View):
@@ -128,7 +126,9 @@ class setupView(View):
 
     @discord.ui.button(label="Start", style=discord.ButtonStyle.green)
     async def bwa(self, interaction: discord.Interaction, button: Button):
+        originMsg = interaction.message
         await interaction.response.send_modal(startModal(self.ctx))
+        await originMsg.edit(content="Next, which folder would you like to use as the folder of system members who are messageable?\nIt's advised to create a new folder ouside of any nesting, called 'pluraxy'")
 
 @bot.command(name="setup")
 async def setup(ctx):
