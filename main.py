@@ -62,7 +62,7 @@ def get_all_fronters(sp_token):
     return fronters
 
 def get_attribute_for_all_alters(sp_token,trait):
-    "sp_token is the token, and the trait is the desired aspect.  it returns a list of strings of traits"
+    "sp_token is the token, and the trait is the desired aspect. it returns a list of strings of traits"
     #trait options are: name, buckets, color, desc, pronouns, archived, preventsFrontNotifs
     sysID = get_sys_trait(sp_token, "uid")
     url = "https://api.apparyllis.com/v1/members/"+sysID
@@ -205,7 +205,7 @@ def add_new_message(sp_token_from_user): #note! there are some generalizable fra
     # "lovely! what message do you want to pass on for when they front?" ["mrow!!"]
     fronter_s = get_all_fronters(sp_token_from_user)
     if len(fronter_s) != 1:
-    # "want this to be sent from 1. everyone in front  2. fronter A 3. fronter B .... type a number, or combination of numbers (to send label it as from all of them) to respond" [1]
+    # "want this to be sent from 1. everyone in front 2. fronter A 3. fronter B .... type a number, or combination of numbers (to send label it as from all of them) to respond" [1]
         all_fronters = list(map(lambda x:list(x),list(zip(fronter_s,list(map(lambda x:str(x+2),list(range(len(fronter_s)))))))))
         all_fronters_str = list(map(lambda x: x[1]+": "+x[0],all_fronters))
         try:
