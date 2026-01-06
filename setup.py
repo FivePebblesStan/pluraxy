@@ -16,6 +16,7 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="px.", intents=intents)
+client = discord.Client(intents=intents)
 active_games = {}
 payload = {}
 
@@ -33,7 +34,7 @@ def get_sys_trait(sp_token,trait):
     return response1.json()["content"][trait]
 
 def get_attribute_for_all_alters(sp_token,trait):
-    "sp_token is the token, and the trait is the desired aspect.  it returns a list of strings of traits"
+    "sp_token is the token, and the trait is the desired aspect. it returns a list of strings of traits"
     #trait options are: name, buckets, color, desc, pronouns, archived, preventsFrontNotifs
     sysID = get_sys_trait(sp_token, "uid")
     url = "https://api.apparyllis.com/v1/members/"+sysID
@@ -63,12 +64,6 @@ class setupView(View):
     async def bwa(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(startModal(self.ctx))
 
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.green)
-    async def eepy(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("The way Pluraxy knows which alters in your are messageable is via looking at the buckets of a SimplyPlural profile you choose, and allowing messaging to all the profiles in those buckets\n"
-                                                "E.g. profile 1 is in buckets A and B, profile 2 is in buckets B and C, and profile 3 is in buckets C and D. If profile 1 is chosen as the bucket basis, only profiles 1 and 2 will be messageable, not profile 3.\n"
-                                                "So, please press this button and type in the name of a profile on your SimplyPlural that is in all the buckets you would like to be accessible. (You may create an extra profile for this purpose if necessary.)", view=bucketsView(self.ctx), ephemeral=True)
-
 #modal for px.setup
 class startModal(Modal):
     def __init__(self, ctx):
@@ -80,7 +75,28 @@ class startModal(Modal):
     async def on_submit(self, interaction: discord.Interaction):
         global spToken
         spToken = self.input.value
-        await interaction.response.send_message("Your SimplyPlural read token is now set to " + spToken, ephemeral=True)
+
+        headers = {'Authorization': spToken}
+        response = requests.request("GET", "https://api.apparyllis.com/v1/me", headers=headers, data=payload)
+        if response.status_code != 200:
+            await interaction.response.send_message("Something went wrong. Please make sure your SimplyPlural token is correct and try again.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Your SimplyPlural token is valid. Hello, " + response.json()["content"]["username"] +"!", view=nextView(self.ctx), ephemeral=True)
+        with open("pluraxy-users.txt", "a") as file:
+            file.write(spToken + ", " + response.json()["content"]["username"] + ", " + userId + ", " + client.get_user(self, userId))
+
+
+#view for interstep of px.setup
+class nextView(View):
+    def __init__(self, ctx):
+        super().__init__()
+        self.ctx = ctx
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.green)
+    async def eepy(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_message("The way Pluraxy knows which alters in your are messageable is via looking at the buckets of a SimplyPlural profile you choose, and allowing messaging to all the profiles in those buckets.\n"
+                                                "E.g. profile 1 is in buckets A and B, profile 2 is in buckets B and C, and profile 3 is in buckets C and D. If profile 1 is chosen as the bucket basis, only profiles 1 and 2 will be messageable, not profile 3.\n"
+                                                "So, please press this button and type in the name of a profile on your SimplyPlural that is in all the buckets you would like to be accessible. (You may create an extra profile for this purpose if necessary.)", view=bucketsView(self.ctx), ephemeral=True)
 
 # view for pt2 of px.setup
 class bucketsView(View):
@@ -105,10 +121,16 @@ class bucketsModal(Modal):
         global buckets
         buckets = choose_bucket(spToken, profile)
         await interaction.response.send_message("The selected bucket(s) is/are: " + buckets[0], ephemeral=True)
+        with open("pluraxy-users.txt", "a") as file:
+            file.write(", " + buckets + "\n")
 
 @bot.command(name="setup")
 async def setup(ctx):
+    global userId
+    userId = ctx.author.id
     view = setupView(ctx)
-    await ctx.send("Click the button to begin pluraxy setup", view=view)
+    await ctx.send("Welcome to Pluraxy, a bot for messaging alters! Thank you for using this bot ^^\n"
+                   "Currently, Pluraxy only uses SimplyPlural in order to fetch system info. PluralKit may be added at some point as well."
+                   "To begin account setup using SimplyPlural, click the start button!", view=view)
 
 bot.run(token)
