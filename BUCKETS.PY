@@ -1,12 +1,8 @@
 response = requests.request("GET", "https://api.apparyllis.com/v1/privacyBuckets", headers=headers, data=payload)
-print(response.text)
 bucketsNum = len(response.json())
 bucketsOpt = []
 for i in range(bucketsNum):
-    bucketName = response.json()[i]["content"]["name"] + response.json()[i]["content"]["icon"]
-    print(bucketName)
-    bucketsOpt.append(discord.SelectOption(label=bucketName, value=response.json()[i]["id"]))
-    print(bucketsOpt)
+    bucketsOpt.append(discord.SelectOption(label=response.json()[i]["content"]["name"] + response.json()[i]["content"]["icon"], value=response.json()[i]["id"]))
 
 #
 
