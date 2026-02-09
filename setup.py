@@ -52,6 +52,21 @@ def choose_bucket(sp_token, alter_name):
     bucket = next(val for val in messy_bucket if val is not None)[0]
     return bucket
 
+def bucket_name(sp_token, bucket_id):
+    url = "https://api.apparyllis.com/v1/privacyBucket/" + bucket_id
+    headers = {'Authorization': sp_token}
+    response = requests.request("GET", url, headers=headers, data=payload)
+    bucketName = response.json()["content"]["name"] + " " + response.json()["content"]["icon"]
+    return bucketName
+
+def get_buckets(sp_token):
+    response = requests.request("GET", "https://api.apparyllis.com/v1/privacyBuckets", headers={'Authorization': sp_token}, data=payload)
+    bucketsNum = len(response.json())
+    bucketsOpt = []
+    for i in range(bucketsNum):
+        bucketsOpt.append(discord.SelectOption(label=response.json()[i]["content"]["name"] + response.json()[i]["content"]["icon"], value=response.json()[i]["id"]))
+    return bucketsOpt
+
 #++++++++++++++++++++++++++++++++++++++++++++++++++#
 
 #view for px.setup
@@ -63,6 +78,8 @@ class setupView(View):
     @discord.ui.button(label="Start", style=discord.ButtonStyle.green)
     async def bwa(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(startModal(self.ctx))
+        button.disabled = True
+        await interaction.edit_original_response(view=self)
 
 #modal for px.setup
 class startModal(Modal):
@@ -82,12 +99,18 @@ class startModal(Modal):
             await interaction.response.send_message("Something went wrong. Please make sure your SimplyPlural token is correct and try again.", ephemeral=True)
         else:
             await interaction.response.send_message("Your SimplyPlural token is valid. Hello, " + response.json()["content"]["username"] +"!", view=nextView(self.ctx), ephemeral=True)
-        user = await self.ctx.bot.fetch_user(userId)
-        with open("pluraxy-users.txt", "a") as file:
-            file.write(spToken + ", " + response.json()["content"]["username"] + ", " + str(userId) + ", " + str(user))
+        user = await self.ctx.bot.fetch_user(self.ctx.author.id)
 
+        with open("pluraxy-users.txt", "r") as file:
+            usersDict = eval(file.read())
+            tempDict = {"spToken" : spToken,
+                        "spUser" : response.json()["content"]["username"],
+                        "disUser" : str(user)}
+            usersDict[str(self.ctx.author.id)] = tempDict
+        with open("pluraxy-users.txt", "w") as file:
+            file.write(str(usersDict))
 
-#view for interstep1.5 of px.setup
+#view for part2 of px.setup
 class nextView(View):
     def __init__(self, ctx):
         super().__init__()
@@ -95,36 +118,35 @@ class nextView(View):
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.green)
     async def eepy(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("The way Pluraxy knows which alters in your are messageable is via looking at the buckets of a SimplyPlural profile you choose, and allowing messaging to all the profiles in those buckets.\n"
-                                                "E.g. profile 1 is in buckets A and B, profile 2 is in buckets B and C, and profile 3 is in buckets C and D. If profile 1 is chosen as the bucket basis, only profiles 1 and 2 will be messageable, not profile 3.\n"
-                                                "So, please press this button and type in the name of a profile on your SimplyPlural that is in all the buckets you would like to be accessible. (You may create a temporary extra profile for this purpose if necessary.)", view=bucketsView(self.ctx), ephemeral=True)
+        await interaction.response.send_message("Now, please choose which SimplyPlural buckets you'd like to be accessible via the Pluraxy messaging system.\n"
+                                                "Only those that are in the buckets you choose will be messageable by other Pluraxy users.", view=bucketsView(self.ctx), ephemeral=True)
+        #button.disabled = True
+        #await interaction.edit_original_response(view=self)
 
-# view for pt2 of px.setup
 class bucketsView(View):
     def __init__(self, ctx):
         super().__init__()
+        with open("pluraxy-users.txt", "r") as file:
+            usersDict = eval(file.read())
+        bucketsOpt = get_buckets(usersDict[str(ctx.author.id)]["spToken"])
         self.ctx = ctx
+        self.waaaa.options = bucketsOpt
+        self.waaaa.min_values = 1
+        self.waaaa.max_values = len(bucketsOpt)
 
-    @discord.ui.button(label="Choose a profile", style=discord.ButtonStyle.green)
-    async def www(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(bucketsModal(self.ctx))
-
-#modal for pt2 of px.setup
-class bucketsModal(Modal):
-    def __init__(self, ctx):
-        super().__init__(title="Set Up Account")
-        self.ctx = ctx
-        self.input = TextInput(label="Profile name")
-        self.add_item(self.input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        profile = self.input.value
-        global buckets
-        buckets = choose_bucket(spToken, profile)
-        await interaction.response.send_message("The selected bucket(s) is/are: " + buckets + "\n"
-                                                "-# (If you created a temporary profile for this, you may now delete it)", view=nexttView(self.ctx), ephemeral=True)
-        with open("pluraxy-users.txt", "a") as file:
-            file.write(", " + buckets + "\n")
+    @discord.ui.select()
+    async def waaaa(self, interaction: Interaction, select):
+        await interaction.response.send_message(f"The selected bucket(s) is/are: {select.values}", view=nexttView(self.ctx), ephemeral=True)
+        buckets = select.values
+        buckOpt = {}
+        for i in range(len(buckets)):
+            bucketName = "bucket" + str(i)
+            buckOpt[bucketName] = buckets[i]
+        with open("pluraxy-users.txt", "r") as file:
+            usersDict = eval(file.read())
+            usersDict[str(self.ctx.author.id)]["buckets"] = buckOpt
+        with open("pluraxy-users.txt", "w") as file:
+            file.write(str(usersDict))
 
 #view for interstep2.5 of px.setup
 class nexttView(View):
@@ -135,6 +157,8 @@ class nexttView(View):
     @discord.ui.button(label="Next", style=discord.ButtonStyle.green)
     async def eepy(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message("Lastly, would you like it so that only users who are friends with you on SimplyPlural can message those in your system?", view=friendsView(self.ctx), ephemeral=True)
+        #button.disabled = True
+        #await interaction.edit_original_response(view=self)
 
 #view for pt.3 of px.setup
 class friendsView(View):
@@ -147,17 +171,23 @@ class friendsView(View):
         await interaction.response.send_message("Alright, only SP friends will be able to message.\n"
                                                 "Pluraxy setup is now complete, thank you! You can now use the bot.\n"
                                                 "Type px.message to send a message to someone!", ephemeral=True)
+        with open("pluraxy-users.txt", "a") as file:
+            file.write("true\n")
+        #button.disabled = True
+        #await interaction.edit_original_response(view=self)
 
     @discord.ui.button(label="Anyone can message", style=discord.ButtonStyle.grey)
     async def eepier(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_message("Alright, anyone will be able to message.\n"
                                                 "Pluraxy setup is now complete, thank you! You can now use the bot.\n"
                                                 "Type px.message to send a message to someone!", ephemeral=True)
+        with open("pluraxy-users.txt", "a") as file:
+            file.write("false\n")
+        #button.disabled = True
+        #await interaction.edit_original_response(view=self)
 
 @bot.command(name="setup")
 async def setup(ctx):
-    global userId
-    userId = ctx.author.id
     view = setupView(ctx)
     await ctx.send("Welcome to Pluraxy, a bot for messaging alters! Thank you for using this bot ^^\n"
                    "Currently, Pluraxy only uses SimplyPlural in order to fetch system info. PluralKit may be added at some point as well.\n"
