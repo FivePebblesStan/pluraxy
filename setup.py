@@ -26,32 +26,6 @@ async def on_ready():
 
 #==================================================#
 
-def get_sys_trait(sp_token,trait):
-    "sp_token is the token, trait is an aspect like uid, username, desc, isAsystem. it returns a string of the trait"
-    url = "https://api.apparyllis.com/v1/me/"
-    headers = {'Authorization': sp_token}
-    response1 = requests.request("GET", url, headers=headers, data=payload)
-    return response1.json()["content"][trait]
-
-def get_attribute_for_all_alters(sp_token,trait):
-    "sp_token is the token, and the trait is the desired aspect. it returns a list of strings of traits"
-    #trait options are: name, buckets, color, desc, pronouns, archived, preventsFrontNotifs
-    sysID = get_sys_trait(sp_token, "uid")
-    url = "https://api.apparyllis.com/v1/members/"+sysID
-    headers = {'Authorization': sp_token}
-    response = requests.request("GET", url, headers=headers, data=payload)
-    traits = []
-    for alter in response.json():
-        traits.append(alter["content"][trait])
-    return traits
-
-def choose_bucket(sp_token, alter_name):
-    "cmon. you know what sp_token is. alter_name is the name of an alter that has the bucket you want "
-    name_buckets = list(map(lambda x: get_attribute_for_all_alters(sp_token,x),["name","buckets"]))
-    messy_bucket = [a[1] if a[0] == alter_name else None for a in zip(name_buckets[0],name_buckets[1])]
-    bucket = next(val for val in messy_bucket if val is not None)[0]
-    return bucket
-
 def bucket_name(sp_token, bucket_id):
     url = "https://api.apparyllis.com/v1/privacyBucket/" + bucket_id
     headers = {'Authorization': sp_token}
@@ -67,6 +41,14 @@ def get_buckets(sp_token):
         bucketsOpt.append(discord.SelectOption(label=response.json()[i]["content"]["name"] + response.json()[i]["content"]["icon"], value=response.json()[i]["id"]))
     return bucketsOpt
 
+def edit_file(*key, value):
+    with open("pluraxy-users.txt", "r") as file:
+        usersDict = eval(file.read())
+        keyString = "usersDict[\"" + "\"][\"".join(key) + "\"] = " + str(value)
+        exec(keyString)
+    with open("pluraxy-users.txt", "w") as file:
+        file.write(str(usersDict))
+
 #++++++++++++++++++++++++++++++++++++++++++++++++++#
 
 #view for px.setup
@@ -75,7 +57,7 @@ class setupView(View):
         super().__init__()
         self.ctx = ctx
 
-    @discord.ui.button(label="Start", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Enter token", style=discord.ButtonStyle.green)
     async def bwa(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(startModal(self.ctx))
         button.disabled = True
@@ -90,25 +72,20 @@ class startModal(Modal):
         self.add_item(self.input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        global spToken
         spToken = self.input.value
 
         headers = {'Authorization': spToken}
         response = requests.request("GET", "https://api.apparyllis.com/v1/me", headers=headers, data=payload)
         if response.status_code != 200:
-            await interaction.response.send_message("Something went wrong. Please make sure your SimplyPlural token is correct and try again.", ephemeral=True)
+            await interaction.response.send_message("Something went wrong. Please make sure your SimplyPlural token is correct and try again.", view=setupView(self.ctx), ephemeral=True)
         else:
             await interaction.response.send_message("Your SimplyPlural token is valid. Hello, " + response.json()["content"]["username"] +"!", view=nextView(self.ctx), ephemeral=True)
         user = await self.ctx.bot.fetch_user(self.ctx.author.id)
 
-        with open("pluraxy-users.txt", "r") as file:
-            usersDict = eval(file.read())
-            tempDict = {"spToken" : spToken,
-                        "spUser" : response.json()["content"]["username"],
-                        "disUser" : str(user)}
-            usersDict[str(self.ctx.author.id)] = tempDict
-        with open("pluraxy-users.txt", "w") as file:
-            file.write(str(usersDict))
+        tempDict = {"spToken": spToken,
+                    "spUser": response.json()["content"]["username"],
+                    "disUser": str(user)}
+        edit_file(str(self.ctx.author.id), value=tempDict)
 
 #view for part2 of px.setup
 class nextView(View):
@@ -127,8 +104,8 @@ class bucketsView(View):
     def __init__(self, ctx):
         super().__init__()
         with open("pluraxy-users.txt", "r") as file:
-            usersDict = eval(file.read())
-        bucketsOpt = get_buckets(usersDict[str(ctx.author.id)]["spToken"])
+            self.usersDict = eval(file.read())
+        bucketsOpt = get_buckets(self.usersDict[str(ctx.author.id)]["spToken"])
         self.ctx = ctx
         self.waaaa.options = bucketsOpt
         self.waaaa.min_values = 1
@@ -136,17 +113,20 @@ class bucketsView(View):
 
     @discord.ui.select()
     async def waaaa(self, interaction: Interaction, select):
-        await interaction.response.send_message(f"The selected bucket(s) is/are: {select.values}", view=nexttView(self.ctx), ephemeral=True)
+        await interaction.response.defer(thinking=True, ephemeral=True)
         buckets = select.values
         buckOpt = {}
+        buckList = []
+        headers = {'Authorization': self.usersDict[str(self.ctx.author.id)]["spToken"]}
         for i in range(len(buckets)):
             bucketName = "bucket" + str(i)
             buckOpt[bucketName] = buckets[i]
-        with open("pluraxy-users.txt", "r") as file:
-            usersDict = eval(file.read())
-            usersDict[str(self.ctx.author.id)]["buckets"] = buckOpt
-        with open("pluraxy-users.txt", "w") as file:
-            file.write(str(usersDict))
+            url = "https://api.apparyllis.com/v1/privacyBucket/" + buckets[i]
+            response = requests.request("GET", url, headers=headers, data=payload)
+            buckList.append(response.json()["content"]["name"] + " " + response.json()["content"]["icon"])
+        await interaction.followup.send(f"The selected bucket(s) is/are: " + ", ".join(buckList), view=nexttView(self.ctx), ephemeral=True)
+
+        edit_file(str(self.ctx.author.id), "buckets", value=buckOpt)
 
 #view for interstep2.5 of px.setup
 class nexttView(View):
@@ -171,8 +151,7 @@ class friendsView(View):
         await interaction.response.send_message("Alright, only SP friends will be able to message.\n"
                                                 "Pluraxy setup is now complete, thank you! You can now use the bot.\n"
                                                 "Type px.message to send a message to someone!", ephemeral=True)
-        with open("pluraxy-users.txt", "a") as file:
-            file.write("true\n")
+        edit_file(str(self.ctx.author.id), "onlyFriends", value="True")
         #button.disabled = True
         #await interaction.edit_original_response(view=self)
 
@@ -181,17 +160,20 @@ class friendsView(View):
         await interaction.response.send_message("Alright, anyone will be able to message.\n"
                                                 "Pluraxy setup is now complete, thank you! You can now use the bot.\n"
                                                 "Type px.message to send a message to someone!", ephemeral=True)
-        with open("pluraxy-users.txt", "a") as file:
-            file.write("false\n")
+        edit_file(str(self.ctx.author.id), "onlyFriends", value="False")
         #button.disabled = True
         #await interaction.edit_original_response(view=self)
 
 @bot.command(name="setup")
 async def setup(ctx):
-    view = setupView(ctx)
-    await ctx.send("Welcome to Pluraxy, a bot for messaging alters! Thank you for using this bot ^^\n"
-                   "Currently, Pluraxy only uses SimplyPlural in order to fetch system info. PluralKit may be added at some point as well.\n"
-                   "To begin account setup using SimplyPlural, click the start button!", view=view)
-
+    with open("pluraxy-users.txt", "r") as file:
+        usersDict = eval(file.read())
+    if usersDict.get(str(ctx.author.id)) is None:
+        view = setupView(ctx)
+        await ctx.send("Welcome to Pluraxy, a bot for messaging alters! Thank you for using this bot ^^\n"
+                       "Currently, Pluraxy only uses SimplyPlural in order to fetch system info. PluralKit may be added at some point as well.\n"
+                       "To begin account setup using SimplyPlural, click the button! You will need a read token for your SimplyPlural account.", view=view)
+    else:
+        await ctx.send("You've already set up your Pluraxy account!")
 bot.run(token)
 #client.run(token)
