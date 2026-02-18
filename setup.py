@@ -1,13 +1,11 @@
 import discord
 import requests
 from discord import Interaction
-from discord._types import ClientT
 from discord.ext import commands
 from dotenv import load_dotenv
 from discord.ui import Modal, TextInput, View, Button, Select
 
 load_dotenv()
-#api_key = open("api-key.txt").read()
 token = open("discord-token.txt").read()
 
 intents = discord.Intents.default()
@@ -72,20 +70,21 @@ class startModal(Modal):
         self.add_item(self.input)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         spToken = self.input.value
-
         headers = {'Authorization': spToken}
         response = requests.request("GET", "https://api.apparyllis.com/v1/me", headers=headers, data=payload)
         if response.status_code != 200:
-            await interaction.response.send_message("Something went wrong. Please make sure your SimplyPlural token is correct and try again.", view=setupView(self.ctx), ephemeral=True)
+            await interaction.followup.send("Something went wrong. Please make sure your SimplyPlural token is correct and try again.", view=setupView(self.ctx), ephemeral=True)
         else:
-            await interaction.response.send_message("Your SimplyPlural token is valid. Hello, " + response.json()["content"]["username"] +"!", view=nextView(self.ctx), ephemeral=True)
+            await interaction.followup.send("Your SimplyPlural token is valid. Hello, " + response.json()["content"]["username"] +"!", view=nextView(self.ctx), ephemeral=True)
         user = await self.ctx.bot.fetch_user(self.ctx.author.id)
 
         tempDict = {"spToken": spToken,
                     "spUser": response.json()["content"]["username"],
                     "disUser": str(user)}
         edit_file(str(self.ctx.author.id), value=tempDict)
+
 
 #view for part2 of px.setup
 class nextView(View):
@@ -95,10 +94,11 @@ class nextView(View):
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.green)
     async def eepy(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("Now, please choose which SimplyPlural buckets you'd like to be accessible via the Pluraxy messaging system.\n"
+        await interaction.response.defer()
+        button.disabled = True
+        await interaction.edit_original_response(view=self)
+        await interaction.followup.send("Now, please choose which SimplyPlural buckets you'd like to be accessible via the Pluraxy messaging system.\n"
                                                 "Only those that are in the buckets you choose will be messageable by other Pluraxy users.", view=bucketsView(self.ctx), ephemeral=True)
-        #button.disabled = True
-        #await interaction.edit_original_response(view=self)
 
 class bucketsView(View):
     def __init__(self, ctx):
@@ -136,9 +136,10 @@ class nexttView(View):
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.green)
     async def eepy(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("Lastly, would you like it so that only users who are friends with you on SimplyPlural can message those in your system?", view=friendsView(self.ctx), ephemeral=True)
-        #button.disabled = True
-        #await interaction.edit_original_response(view=self)
+        await interaction.response.defer()
+        button.disabled = True
+        await interaction.edit_original_response(view=self)
+        await interaction.followup.send("Lastly, would you like it so that only users who are friends with you on SimplyPlural can message those in your system?", view=friendsView(self.ctx), ephemeral=True)
 
 #view for pt.3 of px.setup
 class friendsView(View):
@@ -148,21 +149,27 @@ class friendsView(View):
 
     @discord.ui.button(label="Only SP friends can message", style=discord.ButtonStyle.grey)
     async def eepiest(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("Alright, only SP friends will be able to message.\n"
+        await interaction.response.defer()
+        button.disabled = True
+        otherButton = discord.utils.get(self.children, label="Anyone can message")
+        otherButton.disabled = True
+        await interaction.edit_original_response(view=self)
+        await interaction.followup.send("Alright, only SP friends will be able to message.\n"
                                                 "Pluraxy setup is now complete, thank you! You can now use the bot.\n"
                                                 "Type px.message to send a message to someone!", ephemeral=True)
         edit_file(str(self.ctx.author.id), "onlyFriends", value="True")
-        #button.disabled = True
-        #await interaction.edit_original_response(view=self)
 
     @discord.ui.button(label="Anyone can message", style=discord.ButtonStyle.grey)
     async def eepier(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("Alright, anyone will be able to message.\n"
+        await interaction.response.defer()
+        button.disabled = True
+        otherButton = discord.utils.get(self.children, label="Only SP friends can message")
+        otherButton.disabled = True
+        await interaction.edit_original_response(view=self)
+        await interaction.followup.send("Alright, anyone will be able to message.\n"
                                                 "Pluraxy setup is now complete, thank you! You can now use the bot.\n"
                                                 "Type px.message to send a message to someone!", ephemeral=True)
         edit_file(str(self.ctx.author.id), "onlyFriends", value="False")
-        #button.disabled = True
-        #await interaction.edit_original_response(view=self)
 
 @bot.command(name="setup")
 async def setup(ctx):
@@ -175,5 +182,3 @@ async def setup(ctx):
                        "To begin account setup using SimplyPlural, click the button! You will need a read token for your SimplyPlural account.", view=view)
     else:
         await ctx.send("You've already set up your Pluraxy account!")
-bot.run(token)
-#client.run(token)
